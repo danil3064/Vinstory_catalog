@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vinstory Club — каталог</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg:#f8f6f2; --panel:#faf8f4; --card:#ffffff; --text:#1c1c1c; --muted:#7c7c7c;
+      --stroke:#e9e4dc; --shadow: 0 1px 1px rgba(20,20,20,.03), 0 10px 24px rgba(20,20,20,.06);
+      --accent:#111; --accent-soft:#161616; --brand:#c8a96b;
+    }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+
+    header{position:sticky;top:0;z-index:50;background:var(--panel);backdrop-filter:saturate(180%) blur(6px);
+            border-bottom:1px solid var(--stroke);padding:12px 16px;display:flex;gap:12px;align-items:center}
+    .logo{width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid var(--stroke);
+          display:grid;place-items:center;font-weight:800;letter-spacing:.5px;color:#111;box-shadow:var(--shadow)}
+    h1{margin:0;font-size:18px;letter-spacing:.2px}
+    .reset{margin-left:auto;background:#fff;border:1px solid var(--stroke);padding:8px 12px;border-radius:10px;
+            color:var(--text);box-shadow:var(--shadow)}
+
+    .filters{position:sticky;top:56px;z-index:40;background:var(--panel);border-bottom:1px solid var(--stroke);
+             padding:10px 12px;display:flex;gap:8px;overflow:auto}
+    .filters select,.filters input{appearance:none;background:#fff;border:1px solid var(--stroke);color:var(--text);
+       padding:10px 12px;border-radius:12px;min-width:120px;box-shadow:var(--shadow)}
+    .filters input[type=number]{width:110px}
+
+    .wrap{padding:14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+    .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow);}
+    .thumb{width:100%;aspect-ratio:1/1;object-fit:cover;background:#f3f2ef;display:block}
+    .body{padding:12px;display:flex;flex-direction:column;gap:4px}
+    .title{margin:0;font-size:14px;font-weight:700;line-height:1.25;letter-spacing:.2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .meta{margin:0;font-size:12px;color:var(--muted)}
+    .price{font-size:15px;color:#0f0f0f;margin-top:2px}
+
+    .cta{margin-top:8px;display:flex}
+    .btn{flex:1 1 0;background:#fff;border:1px solid var(--stroke);padding:10px 12px;border-radius:12px;color:var(--text);
+         text-align:center;text-decoration:none;box-shadow:var(--shadow);height:40px;line-height:20px;display:grid;place-items:center;
+         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .btn.primary{background:var(--accent);color:#fff;border-color:#0e0e0e}
+    .btn.primary:active{background:var(--accent-soft)}
+
+    .empty{padding:48px 12px;text-align:center;color:var(--muted)}
+    @media (min-width:720px){ .filters{top:60px} .grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))} }
+
+    /* White gallery modal */
+    .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}
+    .modal.open{display:flex}
+    .sheet{width:min(620px,96vw);max-height:92vh;background:#fff;border:1px solid var(--stroke);border-radius:18px;overflow:hidden;
+            display:flex;flex-direction:column;box-shadow:0 24px 48px rgba(0,0,0,.12)}
+    .sheet header{position:relative;background:#fff;border-bottom:1px solid var(--stroke);padding:10px 12px;display:flex;gap:8px;align-items:center}
+    .close{margin-left:auto;background:#fff;border:1px solid var(--stroke);color:var(--text);border-radius:10px;padding:8px 10px;box-shadow:var(--shadow)}
+    .gallery{background:#fff;display:flex;align-items:center;justify-content:center}
+    .big{max-height:56vh;max-width:100%;width:100%;object-fit:contain;background:#fff;display:block}
+    .strip{display:flex;gap:6px;overflow:auto;padding:8px;background:#f3f2ef;border-top:1px solid var(--stroke)}
+    .strip img{height:68px;border-radius:10px;opacity:.95;cursor:pointer;box-shadow:var(--shadow);border:1px solid var(--stroke)}
+    .strip img.active{outline:2px solid var(--brand);opacity:1}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">V</div>
+    <h1>Vinstory Club</h1>
+    <button id="reset" class="reset">Сброс</button>
+  </header>
+
+  <div class="filters">
+    <select id="gender">
+      <option value="">Пол: все</option>
+      <option value="m">Мужские</option>
+      <option value="w">Женские</option>
+    </select>
+    <select id="size">
+      <option value="">Размер EU</option>
+      <option>36</option><option>37</option><option>38</option><option>39</option><option>40</option>
+      <option>41</option><option>42</option><option>43</option><option>44</option><option>45</option>
+    </select>
+    <input id="minp" type="number" inputmode="numeric" placeholder="Цена от" />
+    <input id="maxp" type="number" inputmode="numeric" placeholder="до" />
+  </div>
+
+  <div class="wrap">
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" style="display:none">Пока нет товаров по фильтрам</div>
+  </div>
+
+  <!-- Modal (gallery only) -->
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="sheet">
+      <header>
+        <div style="font-weight:700" id="d-title">Товар</div>
+        <button class="close" id="d-close">Закрыть</button>
+      </header>
+      <div class="gallery">
+        <img id="d-big" class="big" src="" alt="Фото товара">
+      </div>
+      <div id="d-strip" class="strip"></div>
+    </div>
+  </div>
+
+  <script>
+    if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+
+    const supabaseUrl = "https://prtkjlguydfrbekjxmeb.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydGtqbGd1eWRmcmJla2p4bWViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4NjM5NTEsImV4cCI6MjA3MDQzOTk1MX0.JqHlRNw7IYNtygM3Ot18SR2xrjljlWUFkvqUInm9xeI";
+    const db = supabase.createClient(supabaseUrl, supabaseKey);
+
+    const CONTACT_LINK = "https://t.me/danissimmooo04";
+    const el = (id)=>document.getElementById(id);
+    const genderMap = { m: 'Мужские', w: 'Женские', unisex: 'Унисекс' };
+
+    function getPhotos(p) {
+      if (Array.isArray(p)) return p;
+      if (typeof p === 'string') {
+        try { const arr = JSON.parse(p); if (Array.isArray(arr)) return arr; } catch(e){}
+        return p.split(/[,;]\s*/).filter(Boolean);
+      }
+      return [];
+    }
+
+    function matchesSize(selected, sizeEU) {
+      if (!selected) return true;
+      const selectedInt = parseInt(selected, 10);
+      const v = Number(sizeEU);
+      if (isNaN(v)) return false;
+      return Math.floor(v) === selectedInt; // 40 включает 40.5
+    }
+
+    function openTG() {
+      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
+        Telegram.WebApp.openTelegramLink(CONTACT_LINK);
+      } else {
+        window.open(CONTACT_LINK, '_blank');
+      }
+    }
+
+    // ===== Gallery modal =====
+    function openGallery(title, photos) {
+      const modal = el('modal');
+      const big = el('d-big');
+      const strip = el('d-strip');
+      el('d-title').textContent = title;
+      strip.innerHTML='';
+      function show(i) {
+        big.src = photos[i] || '';
+        [...strip.children].forEach((c,ix)=>c.classList.toggle('active', ix===i));
+      }
+      photos.forEach((src,i)=>{ const t=document.createElement('img'); t.src=src; if(i===0) t.classList.add('active'); t.onclick=()=>show(i); strip.appendChild(t); });
+      show(0);
+      modal.classList.add('open'); modal.setAttribute('aria-hidden','false');
+    }
+    document.getElementById('d-close').onclick = ()=>{ const m=el('modal'); m.classList.remove('open'); m.setAttribute('aria-hidden','true'); };
+    document.getElementById('modal').addEventListener('click', (e)=>{ if(e.target.id==='modal') document.getElementById('d-close').click(); });
+
+    function render(list){
+      const grid = el('grid'); grid.innerHTML='';
+      if(!list.length){ el('empty').style.display='block'; return; }
+      el('empty').style.display='none';
+
+      list.forEach(x=>{
+        const photos = getPhotos(x.photos);
+        const cover = photos[0] || '';
+        const title = (x.brand||'') + ' ' + (x.model||'');
+        const genderText = genderMap[(x.gender||'').toLowerCase()] || '';
+
+        const card = document.createElement('div'); card.className='card';
+
+        // кликабельная карточка (открывает галерею)
+        const click = document.createElement('button'); click.type='button'; click.style.border='none'; click.style.background='transparent'; click.style.padding='0'; click.style.textAlign='left'; click.style.cursor='pointer'; click.style.display='block'; click.style.width='100%';
+        click.innerHTML = `
+          <img class="thumb" src="${cover}" alt="${title}" loading="lazy">
+          <div class="body">
+            <p class="title">${title}</p>
+            ${genderText ? `<p class="meta">${genderText}</p>` : ''}
+            <p class="meta">EU: ${x.size_eu ?? '-'}</p>
+            <p class="price">${(x.price||0).toLocaleString('ru-RU')} ₽</p>
+          </div>`;
+        click.addEventListener('click', ()=> openGallery(title, photos));
+        card.appendChild(click);
+
+        // нижняя кнопка "Написать"
+        const cta = document.createElement('div'); cta.className='cta';
+        const btn = document.createElement('button'); btn.className='btn primary'; btn.textContent='Написать';
+        btn.addEventListener('click', (e)=>{ e.stopPropagation(); openTG(); });
+        cta.appendChild(btn);
+        card.appendChild(cta);
+
+        grid.appendChild(card);
+      });
+    }
+
+    function applyFilters() {
+      const gender = el('gender').value;
+      const size = el('size').value;
+      const min = parseInt(el('minp').value||'0',10);
+      const max = parseInt(el('maxp').value||'0',10);
+
+      let list = [...window.__items];
+      if (gender) list = list.filter(x => (x.gender||'').toLowerCase() === gender);
+      if (size) list = list.filter(x => matchesSize(size, x.size_eu));
+      if (min) list = list.filter(x => Number(x.price) >= min);
+      if (max) list = list.filter(x => Number(x.price) <= max);
+
+      render(list);
+    }
+
+    function bindFilters(){
+      ['gender','size','minp','maxp'].forEach(id=> el(id).addEventListener('change', applyFilters));
+      ['minp','maxp'].forEach(id=> el(id).addEventListener('input', applyFilters));
+      el('reset').addEventListener('click', ()=>{ ['gender','size','minp','maxp'].forEach(id=> el(id).value=''); render(window.__items); });
+    }
+
+    async function load(){
+      try {
+        const g = el('grid'); g.innerHTML = '<div class="empty">Загрузка…</div>';
+        const { data, error } = await db.from('vinstory').select('*').order('id',{ascending:false});
+        if(error) throw error;
+        window.__items = data || [];
+        render(window.__items);
+      } catch(err) { console.error(err); el('empty').style.display='block'; }
+    }
+
+    bindFilters();
+    load();
+  </script>
+</body>
+</html>
