@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vinstory Club — каталог</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{
+      --bg:#f8f6f2; --panel:#faf8f4; --card:#ffffff; --text:#1c1c1c; --muted:#6f6f6f;
+      --stroke:#e9e4dc; --shadow:0 1px 1px rgba(20,20,20,.03), 0 10px 24px rgba(20,20,20,.06);
+      --accent:#111; --accent-soft:#161616; --brand:#c8a96b;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+      touch-action:manipulation; overscroll-behavior:contain;
+      -webkit-tap-highlight-color: transparent;
+    }
+    a{color:inherit; text-decoration:none}
+    .hidden{display:none !important}
+
+    /* Header */
+    header{
+      position:sticky; top:0; z-index:50; background:var(--panel); backdrop-filter:saturate(180%) blur(6px);
+      border-bottom:1px solid var(--stroke); padding:12px 14px; display:flex; gap:12px; align-items:center
+    }
+    .logo{width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid var(--stroke);
+      display:grid;place-items:center;font-weight:800;letter-spacing:.5px;color:#111;box-shadow:var(--shadow)}
+    h1{margin:0;font-size:18px;letter-spacing:.2px}
+    .spacer{flex:1}
+    .icon-btn{
+      background:#fff;border:1px solid var(--stroke);padding:8px 12px;border-radius:10px;
+      color:var(--text);box-shadow:var(--shadow);cursor:pointer
+    }
+
+    /* Search row (collapsible) */
+    .search-row{position:sticky; top:56px; z-index:45; background:var(--panel); border-bottom:1px solid var(--stroke);}
+    .search-wrap{display:flex; gap:8px; padding:10px 12px}
+    .search-input{
+      flex:1; min-width:0; background:#fff; border:1px solid var(--stroke); border-radius:12px; padding:10px 12px;
+      box-shadow:var(--shadow); font-size:14px;
+    }
+
+    /* Brand chips */
+    .chips{display:flex; gap:8px; padding:8px 12px; overflow:auto; background:var(--panel); border-bottom:1px solid var(--stroke)}
+    .chip{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 12px; border-radius:999px; border:1px solid var(--stroke); background:#fff; box-shadow:var(--shadow);
+      font-size:13px; white-space:nowrap; cursor:pointer; user-select:none;
+    }
+    .chip.active{background:#111; color:#fff; border-color:#111}
+
+    /* Grid */
+    .wrap{padding:14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+    .card{
+      background:var(--card); border:1px solid var(--stroke); border-radius:16px; overflow:hidden;
+      display:flex; flex-direction:column; box-shadow:var(--shadow); transition:transform .08s ease;
+      cursor:pointer; user-select:none;
+    }
+    .card:active{transform:scale(.995)}
+    .thumb{width:100%; aspect-ratio:1/1; object-fit:cover; background:#fff; display:block}
+    .body{padding:12px; display:flex; flex-direction:column; gap:6px}
+    .title{margin:0;font-size:15px;font-weight:700;line-height:1.25;letter-spacing:.2px}
+    .meta{margin:0;font-size:12px;color:var(--muted)}
+    .price-row{display:flex; align-items:center; gap:10px; margin-top:6px}
+    .price{font-size:16px; font-weight:600; color:#0f0f0f; flex:1}
+    .btn{
+      background:#fff; border:1px solid var(--stroke); padding:10px 12px; border-radius:12px; color:var(--text);
+      text-align:center; box-shadow:var(--shadow)
+    }
+    .btn.primary{background:var(--accent);color:#fff;border-color:#0e0e0e}
+    .btn.primary:active{background:var(--accent-soft)}
+
+    .empty{padding:48px 12px;text-align:center;color:var(--muted)}
+    @media (min-width:720px){
+      .grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+    }
+
+    /* Modal (body lock when open) */
+    body.lock{ position:fixed; width:100%; overflow:hidden }
+    .modal{position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25)}
+    .modal.open{display:flex}
+    .sheet{
+      width:min(680px, 100vw);
+      max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+      background:#fff; border:1px solid var(--stroke); border-radius:18px; overflow:hidden;
+      display:flex; flex-direction:column; box-shadow:0 24px 48px rgba(0,0,0,.12)
+    }
+    .sheet-head{
+      flex:0 0 auto; background:#fff; border-bottom:1px solid var(--stroke);
+      padding:12px 14px; display:flex; gap:8px; align-items:center
+    }
+    .close{margin-left:auto;background:#fff;border:1px solid var(--stroke);color:var(--text);border-radius:10px;padding:8px 10px;box-shadow:var(--shadow)}
+    .sheet-body{
+      flex:1 1 auto; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff;
+      padding-bottom:8px;
+    }
+    .gallery{background:#fff; display:flex; align-items:center; justify-content:center; padding:0 12px}
+    .big{
+      display:block; width:100%; height:auto;
+      max-height:min(56vh,520px);
+      object-fit:contain; background:#fff; border-radius:12px;
+    }
+    .strip{
+      position:sticky; top:0; z-index:2;
+      display:flex; gap:6px; overflow:auto; padding:8px 12px;
+      background:#f6f4f0; border-top:1px solid var(--stroke); border-bottom:1px solid var(--stroke)
+    }
+    .strip img{height:68px; border-radius:10px; opacity:.92; cursor:pointer; box-shadow:var(--shadow); border:1px solid var(--stroke); background:#fff}
+    .strip img.active{outline:2px solid var(--brand); opacity:1}
+    .content{padding:12px 14px; display:flex; flex-direction:column; gap:8px}
+    .desc{font-size:13px; color:#353535; line-height:1.45; white-space:pre-wrap}
+    .buy{
+      flex:0 0 auto; display:flex; gap:10px; padding:12px 14px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      border-top:1px solid var(--stroke); background:#fff
+    }
+    .buy .price{font-size:18px}
+
+    /* Bottom drawer for filters */
+    .drawer{position:fixed; left:0; right:0; bottom:-100%; background:#fff; border-top:1px solid var(--stroke);
+      box-shadow:0 -12px 32px rgba(0,0,0,.12); z-index:120; transition:bottom .2s ease; border-top-left-radius:16px; border-top-right-radius:16px}
+    .drawer.open{bottom:0}
+    .drawer .bar{width:40px; height:4px; border-radius:999px; background:#ddd; margin:10px auto}
+    .drawer .inner{padding:8px 14px 14px}
+    .row{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0}
+    .select,.input{background:#fff; border:1px solid var(--stroke); border-radius:12px; padding:10px 12px; box-shadow:var(--shadow)}
+    .actions-row{display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--stroke); background:#faf8f4}
+    .ghost{background:#fff; border:1px solid var(--stroke)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">V</div>
+    <h1>Vinstory Club</h1>
+    <div class="spacer"></div>
+    <button id="btnSearch" class="icon-btn">Поиск</button>
+    <button id="btnFilters" class="icon-btn">Фильтры</button>
+    <button id="btnSort" class="icon-btn">Сортировка</button>
+  </header>
+
+  <!-- Collapsible search -->
+  <div id="searchRow" class="search-row hidden">
+    <div class="search-wrap">
+      <input id="q" class="search-input" placeholder="Поиск по бренду и модели…" />
+    </div>
+    <!-- Brand chips -->
+    <div id="brandChips" class="chips"></div>
+  </div>
+
+  <div class="wrap">
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" style="display:none">Пока нет товаров по фильтрам</div>
+  </div>
+
+  <!-- Filters drawer -->
+  <div id="drawer" class="drawer" aria-hidden="true">
+    <div class="bar"></div>
+    <div class="inner">
+      <div class="row">
+        <select id="fGender" class="select">
+          <option value="">Пол: все</option>
+          <option value="m">Мужские</option>
+          <option value="w">Женские</option>
+        </select>
+        <input id="fSize" class="input" type="number" inputmode="decimal" step="0.5" placeholder="Размер EU (бакет ±0.5)" />
+      </div>
+      <div class="row">
+        <input id="fMin" class="input" type="number" inputmode="numeric" placeholder="Цена от" />
+        <input id="fMax" class="input" type="number" inputmode="numeric" placeholder="до" />
+      </div>
+      <div class="row">
+        <div style="font-size:13px;color:#555;">Совет: размер 40 покажет 39.5–40.5</div>
+      </div>
+    </div>
+    <div class="actions-row">
+      <button id="btnReset" class="btn ghost">Сброс</button>
+      <div class="spacer"></div>
+      <button id="btnApply" class="btn primary">Применить</button>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div style="font-weight:700" id="d-title">Товар</div>
+        <span class="chip" id="d-chip" style="margin-left:8px"></span>
+        <button class="close" id="d-close">Закрыть</button>
+      </div>
+
+      <div class="sheet-body" id="sheetBody">
+        <div class="gallery">
+          <img id="d-big" class="big" src="" alt="Фото товара">
+        </div>
+        <div id="d-strip" class="strip"></div>
+        <div class="content">
+          <div id="d-meta" class="meta"></div>
+          <div id="d-desc" class="desc"></div>
+        </div>
+      </div>
+
+      <div class="buy">
+        <div id="d-price" class="price"></div>
+        <a id="d-tg" class="btn primary" target="_blank" rel="noopener">Написать в Telegram</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Telegram WebApp niceness
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.ready?.();
+      Telegram.WebApp.expand?.();
+    }
+
+    // ==== CONFIG ====
+    const supabaseUrl = "https://prtkjlguydfrbekjxmeb.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydGtqbGd1eWRmcmJla2p4bWViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4NjM5NTEsImV4cCI6MjA3MDQzOTk1MX0.JqHlRNw7IYNtygM3Ot18SR2xrjljlWUFkvqUInm9xeI";
+    const CONTACT_LINK = "https://t.me/danissimmooo04";
+    const db = supabase.createClient(supabaseUrl, supabaseKey);
+
+    const el = (id)=>document.getElementById(id);
+    const splitPhotos = (s)=> (s||'').split(/[,;]\\s*/).filter(Boolean);
+    const genderLabel = (g)=>{
+      const m=String(g||'').toLowerCase();
+      if(m==='m'||m==='man'||m==='male'||m==='м'||m==='мужские') return 'Мужские';
+      if(m==='w'||m==='woman'||m==='female'||m==='ж'||m==='женские') return 'Женские';
+      return 'Унисекс';
+    };
+
+    // State
+    const state = {
+      items: [],
+      q: "", brand: "",
+      gender: "", size: "", min: "", max: "",
+      sort: "" // '', 'price_asc', 'price_desc', 'newest'
+    };
+
+    // Brand chips
+    const BRANDS = ["All","Adidas","Nike","Puma","Mizuno","Vans","Converse","Saucony","Asics","Reebok"];
+    function renderBrandChips(){
+      const wrap = el('brandChips'); wrap.innerHTML='';
+      BRANDS.forEach(b=>{
+        const chip = document.createElement('button');
+        chip.className = 'chip' + ((state.brand==='' && b==="All") || (state.brand.toLowerCase()===b.toLowerCase() && b!=="All") ? ' active':'');
+        chip.textContent = b;
+        chip.onclick = ()=>{
+          state.brand = (b==="All") ? "" : b.toLowerCase();
+          renderGrid();
+        };
+        wrap.appendChild(chip);
+      });
+    }
+
+    // Skeletons
+    function skeleton(n=6){
+      const g = el('grid'); g.innerHTML='';
+      for(let i=0;i<n;i++){
+        const d=document.createElement('div'); d.className='card';
+        d.innerHTML=\`
+          <div class="thumb" style="background:#f1efeb"></div>
+          <div class="body">
+            <div class="meta" style="height:14px;background:#f1efeb;border-radius:8px"></div>
+          </div>\`;
+        g.appendChild(d);
+      }
+    }
+
+    // Grid render
+    function renderGrid(){
+      const grid = el('grid'); grid.innerHTML='';
+
+      // filter
+      let list = [...state.items];
+      if(state.q){
+        const q = state.q.toLowerCase();
+        list = list.filter(x => (x.brand||'').toLowerCase().includes(q) || (x.model||'').toLowerCase().includes(q));
+      }
+      if(state.brand) list = list.filter(x => (x.brand||'').toLowerCase() === state.brand);
+      if(state.gender) list = list.filter(x => (String(x.gender||'').toLowerCase()===state.gender));
+      if(state.size){
+        const s = Number(state.size);
+        list = list.filter(x=>{
+          const v = Number(x.size_eu);
+          if(isNaN(v)) return false;
+          return Math.abs(v - s) <= 0.5 + 1e-9;
+        });
+      }
+      if(state.min) list = list.filter(x => Number(x.price)>=Number(state.min));
+      if(state.max) list = list.filter(x => Number(x.price)<=Number(state.max));
+
+      // sort
+      if(state.sort==='price_asc') list.sort((a,b)=>Number(a.price)-Number(b.price));
+      if(state.sort==='price_desc') list.sort((a,b)=>Number(b.price)-Number(a.price));
+      if(state.sort==='newest') list.sort((a,b)=>Number(b.id)-Number(a.id));
+
+      if(!list.length){ el('empty').style.display='block'; return; }
+      el('empty').style.display='none';
+
+      list.forEach(x=>{
+        const photos = splitPhotos(x.photos);
+        const cover = (x.cover && String(x.cover).trim()) || photos[0] || '';
+        const title = \`\${x.brand||''} \${x.model||''}\`.trim();
+        const card = document.createElement('a');
+        card.className='card'; card.href='#';
+
+        card.innerHTML = \`
+          <img class="thumb" src="\${cover}" alt="\${title}" loading="lazy">
+          <div class="body">
+            <p class="title">\${title}</p>
+            <p class="meta">\${genderLabel(x.gender)} · EU: \${x.size_eu ?? '-'}</p>
+            <div class="price-row">
+              <div class="price">\${(x.price||0).toLocaleString('ru-RU')} ₽</div>
+              <a class="btn primary" href="${CONTACT_LINK}" target="_blank" rel="noopener">Написать</a>
+            </div>
+          </div>\`;
+
+        card.addEventListener('click',(e)=>{
+          if(e.target.closest('.btn')) return;
+          e.preventDefault(); openDetails(x);
+        });
+
+        grid.appendChild(card);
+      });
+    }
+
+    // Load
+    async function load(){
+      try{
+        skeleton();
+        const { data, error } = await db.from('vinstory').select('*').order('id',{ascending:false});
+        if(error) throw error;
+        state.items = data||[];
+        renderBrandChips();
+        renderGrid();
+      }catch(err){
+        console.error(err);
+        el('empty').style.display='block';
+      }
+    }
+
+    // ==== Search/show controls ====
+    el('btnSearch').onclick = ()=>{
+      el('searchRow').classList.toggle('hidden');
+      if(!el('searchRow').classList.contains('hidden')) el('q').focus();
+    };
+    el('q').addEventListener('input', (e)=>{ state.q = e.target.value.trim(); renderGrid(); });
+
+    // Filters drawer
+    const drawer = el('drawer');
+    el('btnFilters').onclick = ()=> drawer.classList.add('open');
+    function closeDrawer(){ drawer.classList.remove('open'); }
+    el('btnApply').onclick = ()=>{
+      state.gender = el('fGender').value;
+      state.size   = el('fSize').value;
+      state.min    = el('fMin').value;
+      state.max    = el('fMax').value;
+      renderGrid(); closeDrawer();
+    };
+    el('btnReset').onclick = ()=>{
+      state.q = ""; state.brand=""; state.gender=""; state.size=""; state.min=""; state.max="";
+      el('q').value=""; el('fGender').value=""; el('fSize').value=""; el('fMin').value=""; el('fMax').value="";
+      renderBrandChips(); renderGrid(); closeDrawer();
+    };
+    drawer.addEventListener('click', (e)=>{
+      if(e.target===drawer) closeDrawer();
+    });
+
+    // Sorting
+    el('btnSort').onclick = async ()=>{
+      const choice = prompt('Сортировка: price_asc / price_desc / newest', state.sort || 'newest');
+      if(choice!=null){
+        state.sort = ['price_asc','price_desc','newest',''].includes(choice) ? choice : '';
+        renderGrid();
+      }
+    };
+
+    // ===== Details sheet with body scroll lock =====
+    let scrollYBefore=0;
+    function lockBody(){ scrollYBefore = window.scrollY || 0; document.body.classList.add('lock'); document.body.style.top = (-scrollYBefore)+'px'; }
+    function unlockBody(){ document.body.classList.remove('lock'); document.body.style.top=''; window.scrollTo({top:scrollYBefore, left:0}); }
+
+    function openDetails(item){
+      const photos = splitPhotos(item.photos);
+      const title = \`\${item.brand||''} \${item.model||''}\`.trim();
+      el('d-title').textContent = title;
+      el('d-chip').textContent = 'EU ' + (item.size_eu||'-');
+      el('d-meta').textContent = genderLabel(item.gender);
+      el('d-price').textContent = (item.price||0).toLocaleString('ru-RU') + ' ₽';
+      el('d-desc').textContent = item.description || '';
+      el('d-tg').href = "${CONTACT_LINK}";
+
+      const strip = el('d-strip'); strip.innerHTML='';
+      function show(i){ el('d-big').src = photos[i] || ''; [...strip.children].forEach((c,ix)=>c.classList.toggle('active',ix===i)); }
+      photos.forEach((src,i)=>{ const t=document.createElement('img'); t.src=src; if(i===0) t.classList.add('active'); t.onclick=()=>show(i); strip.appendChild(t); });
+      show(0);
+
+      lockBody();
+      el('modal').classList.add('open'); el('modal').setAttribute('aria-hidden','false');
+    }
+    function closeModal(){
+      el('modal').classList.remove('open'); el('modal').setAttribute('aria-hidden','true');
+      unlockBody();
+    }
+    el('d-close').onclick = closeModal;
+    el('modal').addEventListener('click',(e)=>{ if(e.target.id==='modal') closeModal(); });
+
+    // Start
+    load();
+  </script>
+</body>
+</html>
