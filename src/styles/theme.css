@@ -1,0 +1,17 @@
+:root {
+	--bg: #f8f6f2;
+	--panel: #faf8f4;
+	--card: #ffffff;
+	--text: #1c1c1c;
+	--muted: #7c7c7c;
+	--stroke: #e9e4dc;
+	--accent: #111111;
+	--accent-soft: #161616;
+	--brand: #c8a96b;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		/* Keep premium light theme regardless, but you could adapt here if needed */
+	}
+}
