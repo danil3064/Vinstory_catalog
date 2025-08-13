@@ -17,6 +17,8 @@
     body{margin:0;background:var(--bg);color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Arial,sans-serif;
       -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+    /* блокируем фон, когда открыта модалка */
+    body.lock{overflow:hidden}
 
     /* Header */
     header{position:sticky;top:0;z-index:50;background:var(--panel);
@@ -54,24 +56,26 @@
     .btn.primary{background:var(--accent);color:#fff;border-color:#0e0e0e}
     .btn.primary:active{background:var(--accent-soft)}
     .empty{padding:48px 12px;text-align:center;color:var(--muted)}
-
     @media (min-width:720px){
       .filters{top:64px}
       .grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
     }
 
-    /* Modal: grid layout to avoid overlaps */
-    .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.25)}
+    /* Modal */
+    .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.25);overscroll-behavior:contain}
     .modal.open{display:flex}
     .sheet{
       width:min(680px,96vw);max-height:92vh;background:#fff;border:1px solid var(--stroke);
-      border-radius:18px;overflow:hidden;box-shadow:0 24px 48px rgba(0,0,0,.12);
+      border-radius:18px;box-shadow:0 24px 48px rgba(0,0,0,.12);
       display:grid;grid-template-rows:
-        auto                     /* header */
-        minmax(220px,52vh)       /* gallery */
-        auto                     /* strip */
-        1fr                      /* content (scroll) */
-        auto;                    /* buy */
+        auto               /* header */
+        minmax(220px,52vh) /* gallery */
+        auto               /* strip */
+        auto               /* content (auto-height) */
+        auto;              /* buy */
+      overflow:auto;                 /* <- скроллит вся карточка */
+      -webkit-overflow-scrolling:touch;
     }
     .sheet header{background:#fff;border-bottom:1px solid var(--stroke);
       padding:12px 14px;display:flex;gap:8px;align-items:center}
@@ -85,8 +89,7 @@
     .strip img{height:68px;border-radius:10px;opacity:.9;cursor:pointer;box-shadow:var(--shadow);border:1px solid var(--stroke)}
     .strip img.active{outline:2px solid var(--brand);opacity:1}
 
-    .content{padding:12px 14px 8px 14px;display:flex;flex-direction:column;gap:10px;overflow:auto}
-    .content .meta{font-size:13px}
+    .content{padding:12px 14px 8px 14px;display:flex;flex-direction:column;gap:10px}
     .desc{font-size:14px;line-height:1.5;color:#2a2a2a}
 
     .buy{display:flex;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom)) 14px;
@@ -146,7 +149,6 @@
   </div>
 
   <script>
-    // Telegram WebApp niceness
     if (window.Telegram && Telegram.WebApp) {
       Telegram.WebApp.ready();
       Telegram.WebApp.expand();
@@ -157,13 +159,11 @@
     const db = supabase.createClient(supabaseUrl, supabaseKey);
 
     const CONTACT_LINK = "https://t.me/danissimmooo04";
-
     const S = { items: [] };
     const $ = id => document.getElementById(id);
     const splitPhotos = s => (s||'').split(/[,;]\s*/).filter(Boolean);
     const niceGender = g => g==='m' ? 'Мужские' : g==='w' ? 'Женские' : 'Унисекс';
 
-    // skeletons
     (function skeleton(n=6){
       const g = $('grid'); g.innerHTML='';
       for(let i=0;i<n;i++){
@@ -186,7 +186,6 @@
         const photos = splitPhotos(item.photos);
         const cover = item.cover || photos[0] || '';
         const title = `${item.brand||''} ${item.model||''}`.trim();
-
         const card = document.createElement('div'); card.className='card';
         card.innerHTML = `
           <img class="thumb" src="${cover}" alt="${title}" loading="lazy">
@@ -198,16 +197,11 @@
               <a class="btn primary" data-write>Написать</a>
             </div>
           </div>`;
-
-        // целиком карточка = открыть детали
         const open = ()=>openDetails(item);
         card.addEventListener('click', open);
-        // кнопка «Написать» не должна открывать модалку
         card.querySelector('[data-write]').addEventListener('click', (e)=>{
-          e.stopPropagation();
-          window.open(CONTACT_LINK, '_blank', 'noopener');
+          e.stopPropagation(); window.open(CONTACT_LINK,'_blank','noopener');
         });
-
         grid.appendChild(card);
       });
     }
@@ -226,50 +220,44 @@
       const max = parseInt(($('maxp').value||'').trim(),10);
 
       let list = S.items.filter(it => searchFilter(it, q));
-
       if(g) list = list.filter(it => (it.gender||'').toLowerCase() === g);
-
       if(s){
         const target = parseFloat(s);
         list = list.filter(it=>{
           const v = parseFloat(it.size_eu);
-          return !isNaN(v) && Math.abs(v - target) <= 0.51; // корзина: включает .5 рядом
+          return !isNaN(v) && Math.abs(v - target) <= 0.51; // 39.5–40–40.5 считаем одной корзиной
         });
       }
-
       if(!isNaN(min)) list = list.filter(it => Number(it.price)>=min);
       if(!isNaN(max)) list = list.filter(it => Number(it.price)<=max);
-
       render(list);
     }
 
     ['q','gender','size','minp','maxp'].forEach(id=>{
-      const el = $(id);
-      const ev = id==='q' ? 'input' : 'change';
-      el.addEventListener(ev, applyFilters);
+      const el = $(id); el.addEventListener(id==='q'?'input':'change', applyFilters);
     });
     $('reset').addEventListener('click', ()=>{
       ['q','gender','size','minp','maxp'].forEach(id=> $(id).value='');
-      render(S.items);
-      window.scrollTo({top:0,behavior:'smooth'});
+      render(S.items); window.scrollTo({top:0,behavior:'smooth'});
     });
 
     async function load(){
       const { data, error } = await db.from('vinstory').select('*').order('id',{ascending:false});
       if(error){ console.error(error); $('empty').style.display='block'; return; }
-      S.items = data||[];
-      render(S.items);
+      S.items = data||[]; render(S.items);
     }
 
-    // ===== Details sheet =====
+    // ===== Modal control =====
+    function lockBody(on){ document.body.classList.toggle('lock', !!on); }
+
     function openDetails(item){
       const photos = splitPhotos(item.photos);
       const title = `${item.brand||''} ${item.model||''}`.trim();
       $('d-title').textContent = title;
       $('d-chip').textContent = 'EU ' + (item.size_eu ?? '-');
-      $('d-meta').textContent = niceGender(item.gender);
+      $('d-meta').textContent = (item.gender==='m'?'Мужские':item.gender==='w'?'Женские':'Унисекс');
       $('d-price').textContent = (item.price||0).toLocaleString('ru-RU') + ' ₽';
-      $('d-tg').href = CONTACT_LINK;
+      $('d-tg').href = "https://t.me/danissimmooo04";
 
       const desc = (item.description||'').trim();
       const dDesc = $('d-desc');
@@ -287,10 +275,30 @@
       show(0);
 
       $('modal').classList.add('open'); $('modal').setAttribute('aria-hidden','false');
+      lockBody(true);
+
+      // защитим фон от скролла жестами вне карточки (iOS)
+      const modalEl = $('modal');
+      const blockBg = (e)=>{ if(!e.target.closest('.sheet')) e.preventDefault(); };
+      modalEl.addEventListener('wheel', blockBg, {passive:false});
+      modalEl.addEventListener('touchmove', blockBg, {passive:false});
+      modalEl._blockBg = blockBg;
+
       $('d-top').onclick = (e)=>{ e.preventDefault(); document.querySelector('.sheet').scrollTo({top:0,behavior:'smooth'}); };
     }
-    $('d-close').onclick=()=>{ $('modal').classList.remove('open'); $('modal').setAttribute('aria-hidden','true'); };
-    $('modal').addEventListener('click',(e)=>{ if(e.target.id==='modal') $('d-close').click(); });
+
+    function closeDetails(){
+      const modal = $('modal');
+      if(modal._blockBg){
+        modal.removeEventListener('wheel', modal._blockBg);
+        modal.removeEventListener('touchmove', modal._blockBg);
+        modal._blockBg = null;
+      }
+      modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); lockBody(false);
+    }
+
+    $('d-close').onclick = closeDetails;
+    $('modal').addEventListener('click',(e)=>{ if(e.target.id==='modal') closeDetails(); });
 
     load();
   </script>
