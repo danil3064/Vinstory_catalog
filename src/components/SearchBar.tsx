@@ -8,7 +8,7 @@ import BrandChips from '@/components/BrandChips';
 export type SearchBarProps = {
 	search: string;
 	onSearchChange: (q: string) => void;
-	brands: string[];
+	brands: readonly string[];
 	brand: string;
 	onBrandChange: (b: string) => void;
 	onOpenFilters: () => void;

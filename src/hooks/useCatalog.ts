@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { CatalogItem, DatabaseItem, FiltersState, SortOption } from '@/lib/types';
 import { genderLabel, splitPhotos, inSizeBucket } from '@/lib/ui';
 
@@ -41,11 +41,12 @@ export function useCatalog() {
 	useEffect(() => {
 		let mounted = true;
 		setIsLoading(true);
-		supabase
-			.from('vinstory')
-			.select('*')
-			.order('id', { ascending: false })
-			.then(({ data, error }) => {
+		(async () => {
+			try {
+				const { data, error } = await getSupabaseClient()
+					.from('vinstory')
+					.select('*')
+					.order('id', { ascending: false });
 				if (!mounted) return;
 				if (error) {
 					console.error(error);
@@ -53,8 +54,13 @@ export function useCatalog() {
 				} else {
 					setItems((data ?? []).map(toCatalogItem));
 				}
-			})
-			.finally(() => mounted && setIsLoading(false));
+			} catch (err) {
+				console.error(err);
+				if (mounted) setItems([]);
+			} finally {
+				if (mounted) setIsLoading(false);
+			}
+		})();
 		return () => { mounted = false; };
 	}, []);
 
@@ -115,6 +121,6 @@ export function useCatalog() {
 		resetFilters,
 		sort,
 		setSort,
-		brands: BRANDS as string[],
+		brands: BRANDS,
 	};
 }

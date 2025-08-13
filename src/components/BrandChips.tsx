@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/Badge';
 
 export type BrandChipsProps = {
-	brands: string[];
+	brands: readonly string[];
 	value: string;
 	onChange: (brand: string) => void;
 };
